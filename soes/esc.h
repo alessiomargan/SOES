@@ -13,6 +13,7 @@
 
 #include <stdbool.h>
 #include <cc.h>
+#include "esc_octet.h"
 #include "esc_coe.h"
 #include "options.h"
 
@@ -355,6 +356,57 @@ typedef struct CC_PACKED
    uint16_t PSA;
    uint16_t Length;
 
+#if defined(__TMS320C28XX__)
+   union
+   {
+      uint16_t Command;
+      struct
+      {
+         uint16_t Mode:2;
+         uint16_t Direction:2;
+         uint16_t IntECAT:1;
+         uint16_t IntPDI:1;
+         uint16_t WTE:1;
+         uint16_t R1:9;
+      };
+   };
+   union
+   {
+      uint16_t Status;
+      struct
+      {
+         uint16_t IntW:1;
+         uint16_t IntR:1;
+         uint16_t R2:1;
+         uint16_t MBXstat:1;
+         uint16_t BUFstat:2;
+         uint16_t R3:10;
+      };
+   };
+   union
+   {
+      uint16_t ActESC;
+      struct
+      {
+         uint16_t ECsm:1;
+         uint16_t ECrep:1;
+         uint16_t ECr4:4;
+         uint16_t EClatchEC:1;
+         uint16_t EClatchPDI:1;
+         uint16_t ECr8:8;
+      };
+   };
+   union
+   {
+      uint16_t ActPDI;
+      struct
+      {
+         uint16_t PDIsm:1;
+         uint16_t PDIrep:1;
+         uint16_t PDIr5:14;
+      };
+   };
+#else
 #if defined(EC_LITTLE_ENDIAN)
    uint8_t Mode:2;
    uint8_t Direction:2;
@@ -405,6 +457,7 @@ typedef struct CC_PACKED
    uint8_t PDIr5:6;
    uint8_t PDIrep:1;
    uint8_t PDIsm:1;
+#endif
 #endif
 } _ESCsm;
 CC_PACKED_END
@@ -701,11 +754,11 @@ typedef struct
 #define ESC_SM3_smc         (SM3_smc)
 #define ESC_SM3_act         (SM3_act)
 
-#define ESC_MBXHSIZE        ((uint32_t)sizeof(_MBXh))
+#define ESC_MBXHSIZE        ESC_MBX_WIRE_SIZE
 #define ESC_MBXDSIZE        (ESC_MBXSIZE - ESC_MBXHSIZE)
-#define ESC_FOEHSIZE        (uint32_t)sizeof(_FOEh)
+#define ESC_FOEHSIZE        6U
 #define ESC_FOE_DATA_SIZE   (ESC_MBXSIZE - (ESC_MBXHSIZE +ESC_FOEHSIZE))
-#define ESC_EOEHSIZE        ((uint32_t)sizeof(_EOEh))
+#define ESC_EOEHSIZE        4U
 #define ESC_EOE_DATA_SIZE   (ESC_MBXSIZE - (ESC_MBXHSIZE +ESC_EOEHSIZE))
 
 void ESC_config (const esc_cfg_t * cfg);
@@ -735,6 +788,13 @@ void ESC_sm_act_event (void);
 /* From hardware file */
 void ESC_read (uint16_t address, void *buf, uint16_t len);
 void ESC_write (uint16_t address, void *buf, uint16_t len);
+#if defined(__TMS320C28XX__)
+void ESC_read_octets (uint16_t address, esc_octet_t *buf, uint16_t len);
+void ESC_write_octets (uint16_t address, const esc_octet_t *buf, uint16_t len);
+#else
+#define ESC_read_octets(address, buf, len) ESC_read((address), (buf), (len))
+#define ESC_write_octets(address, buf, len) ESC_write((address), (void *)(buf), (len))
+#endif
 void ESC_init (const esc_cfg_t * cfg);
 void ESC_reset (void);
 

@@ -25,6 +25,9 @@ _ESCvar     ESCvar;
 static volatile int watchdog;
 
 #if MAX_MAPPINGS_SM2 > 0
+#if defined(__TMS320C28XX__)
+#pragma DATA_SECTION(rxpdo, "ramgs0")
+#endif
 static uint8_t rxpdo[MAX_RXPDO_SIZE] __attribute__((aligned (8)));
 #else
 //extern uint8_t rxpdo[];
@@ -32,6 +35,9 @@ extern uint8_t * rxpdo;
 #endif
 
 #if MAX_MAPPINGS_SM3 > 0
+#if defined(__TMS320C28XX__)
+#pragma DATA_SECTION(txpdo, "ramgs0")
+#endif
 static uint8_t txpdo[MAX_TXPDO_SIZE] __attribute__((aligned (8)));
 #else
 //extern uint8_t txpdo[];
@@ -159,7 +165,7 @@ void TXPDO_update (void)
       {
          COE_pdoPack (txpdo, ESCvar.sm3mappings, SMmap3);
       }
-      ESC_write (ESC_SM3_sma, txpdo, ESCvar.ESC_SM3_sml);
+      ESC_write_octets (ESC_SM3_sma, txpdo, ESCvar.ESC_SM3_sml);
    }
 }
 
@@ -173,7 +179,7 @@ void RXPDO_update (void)
    }
    else
    {
-      ESC_read (ESC_SM2_sma, rxpdo, ESCvar.ESC_SM2_sml);
+      ESC_read_octets (ESC_SM2_sma, rxpdo, ESCvar.ESC_SM2_sml);
       if (MAX_MAPPINGS_SM2 > 0)
       {
          COE_pdoUnpack (rxpdo, ESCvar.sm2mappings, SMmap2);
@@ -231,7 +237,7 @@ void DIG_process (uint8_t flags)
       }
       else if (ESCvar.ALevent & ESCREG_ALEVENT_SM2)
       {
-         ESC_read (ESC_SM2_sma, rxpdo, ESCvar.ESC_SM2_sml);
+         ESC_read_octets (ESC_SM2_sma, rxpdo, ESCvar.ESC_SM2_sml);
       }
    }
 
@@ -307,7 +313,7 @@ void ecat_slv_worker (uint32_t event_mask)
 void ecat_slv_poll (void)
 {
    /* Read local time from ESC*/
-   ESC_read (ESCREG_LOCALTIME, (void *) &ESCvar.Time, sizeof (ESCvar.Time));
+   ESC_read (ESCREG_LOCALTIME, (void *) &ESCvar.Time, 4U);
    ESCvar.Time = etohl (ESCvar.Time);
 
    /* Check the state machine */
@@ -366,8 +372,7 @@ void ecat_slv_init (esc_cfg_t * config)
    /*  wait until ESC is started up */
    while ((ESCvar.DLstatus & 0x0001) == 0)
    {
-      ESC_read (ESCREG_DLSTATUS, (void *) &ESCvar.DLstatus,
-                sizeof (ESCvar.DLstatus));
+      ESC_read (ESCREG_DLSTATUS, (void *) &ESCvar.DLstatus, 2U);
       ESCvar.DLstatus = etohs (ESCvar.DLstatus);
    }
 
