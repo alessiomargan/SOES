@@ -32,7 +32,8 @@ void EEP_process (void)
 
    while (1) {
       /* read eeprom status */
-      ESC_read (ESCREG_EECONTSTAT, &stat, sizeof (eep_stat_t));
+      ESC_read (ESCREG_EECONTSTAT, &stat.contstat.reg, 2U);
+      ESC_read (ESCREG_EECONTSTAT + 2U, &stat.addr, 4U);
       stat.contstat.reg = etohs(stat.contstat.reg);
       stat.addr = etohl(stat.addr);
 
@@ -58,7 +59,7 @@ void EEP_process (void)
                stat.contstat.bits.ackErr = 1;
             }
             else {
-               ESC_write(ESCREG_EEDATA, eep_buf, eep_read_size);
+               ESC_write_octets (ESCREG_EEDATA, eep_buf, eep_read_size);
             }
             break;
 
@@ -77,7 +78,7 @@ void EEP_process (void)
                       stat.contstat.bits.ackErr = 1;
                    }
                    else {
-                      ESC_write(ESCREG_EEDATA, eep_buf, eep_read_size);
+                      ESC_write_octets (ESCREG_EEDATA, eep_buf, eep_read_size);
                    }
                 }
                 else {
@@ -90,7 +91,8 @@ void EEP_process (void)
                      stat.contstat.bits.ackErr = 1;
                   }
                   else {
-                     ESC_write(ESCREG_EEDATA, eep_buf, 2U /* 2 Bytes config alias*/);
+                     ESC_write_octets (ESCREG_EEDATA, eep_buf,
+                                       2U /* 2 Bytes config alias*/);
                   }
                }
             }
@@ -98,7 +100,7 @@ void EEP_process (void)
 
          case EEP_CMD_WRITE:
             /* handle write request */
-            ESC_read (ESCREG_EEDATA, eep_buf, EEP_WRITE_SIZE);
+            ESC_read_octets (ESCREG_EEDATA, eep_buf, EEP_WRITE_SIZE);
             if (EEP_write (stat.addr * 2U /* sizeof(uint16_t) */, eep_buf, EEP_WRITE_SIZE) != 0) {
                stat.contstat.bits.ackErr = 1;
             }
@@ -110,7 +112,7 @@ void EEP_process (void)
 
       /* acknowledge command */
       stat.contstat.reg = htoes(stat.contstat.reg);
-      ESC_write (ESCREG_EECONTSTAT, &stat.contstat.reg, sizeof(uint16_t));
+      ESC_write (ESCREG_EECONTSTAT, &stat.contstat.reg, 2U);
    }
 }
 

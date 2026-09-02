@@ -22,6 +22,25 @@ extern "C"
    #include <machine/endian.h>   
 #endif
 
+/*
+ * C28x has a 16-bit addressable byte, so the TI C2000 runtime cannot provide
+ * the optional exact-width 8-bit integer types from <stdint.h>. SOES uses
+ * these names for protocol octets; the F28P65x ESC HAL performs the required
+ * octet packing when transferring data to and from the EtherCAT peripheral.
+ */
+#if defined(__TMS320C28XX__)
+#ifndef UINT8_MAX
+typedef uint16_t uint8_t;
+#define UINT8_MAX UINT16_MAX
+#endif
+
+#ifndef INT8_MAX
+typedef int16_t int8_t;
+#define INT8_MIN INT16_MIN
+#define INT8_MAX INT16_MAX
+#endif
+#endif
+
 #ifndef MIN
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #endif
@@ -34,8 +53,13 @@ extern "C"
 
 #define CC_PACKED_BEGIN
 #define CC_PACKED_END
+#if defined(__TMS320C28XX__)
+#define CC_PACKED
+#define CC_ALIGNED(n)
+#else
 #define CC_PACKED       __attribute__((packed))
 #define CC_ALIGNED(n)   __attribute__((aligned (n)))
+#endif
 
 #define CC_ASSERT(exp) assert (exp)
 #define CC_STATIC_ASSERT(exp, msg) _Static_assert (exp, msg)
