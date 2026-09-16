@@ -172,8 +172,8 @@ uint16_t sizeOfPDO (uint16_t index, int * nmappings, _SMmap * mappings,
                   }
 
                   DPRINT ("%04"PRIx32":%02"PRIx32" @ %"PRIu32"\n",
-                        index,
-                        subindex,
+                        (uint32_t) index,
+                        (uint32_t) subindex,
                         offset);
 
                   if (index == 0 && subindex == 0)
@@ -1763,8 +1763,8 @@ void COE_initDefaultValues (void)
          {
             COE_setValue (&objd[i], objd[i].value);
             DPRINT ("%04"PRIx32":%02"PRIx32" = %"PRIx32"\n",
-                  SDOobjects[n].index,
-                  objd[i].subindex,
+                  (uint32_t) SDOobjects[n].index,
+                  (uint32_t) objd[i].subindex,
                   objd[i].value);
          }
       } while (objd[i++].subindex < maxsub);

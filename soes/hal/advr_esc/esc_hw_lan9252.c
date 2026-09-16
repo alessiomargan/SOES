@@ -105,7 +105,8 @@ void ESC_reset (void)
 	do {
 		lan9252_write_32 (ESC_RESET_PDI_REG, *pval);
 		ret = lan9252_read_32 (ESC_RESET_PDI_REG);
-		DPRINT("%s reset_ecat_reg 0x%04X --> 0x%04X\n", __FUNCTION__, *pval, ret);
+		DPRINT("%s reset_ecat_reg 0x%08"PRIX32" --> 0x%08"PRIX32"\n",
+			__FUNCTION__, *pval, ret);
 	} while ( *(++pval) );
 
 }
@@ -118,7 +119,7 @@ void ESC_init (const esc_cfg_t * config)
 	do {
 		value = lan9252_read_32(ESC_BYTE_TEST_REG);
 	} while(value != 0x87654321);
-	DPRINT("%s test_byte_reg 0x%04X ok\n", __FUNCTION__, value);
+	DPRINT("%s test_byte_reg 0x%08"PRIX32" ok\n", __FUNCTION__, value);
 
 	// select which events will be sent to PDI irq
 	// set bit 2 : state of DC sync0
