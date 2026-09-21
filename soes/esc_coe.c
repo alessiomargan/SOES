@@ -1759,6 +1759,24 @@ static uint64_t COE_bitsliceGet (const esc_octet_t *bitmap,
    uint64_t value = 0;
    unsigned int bit;
 
+   /*
+    * PDO mappings are normally byte aligned.  Besides being faster on every
+    * target, this avoids 8/16/32 individual bit accesses on C28x, where each
+    * EtherCAT octet occupies a 16-bit C addressable unit.
+    */
+   if (((offset & 7U) == 0U) && ((length & 7U) == 0U))
+   {
+      unsigned int octets = length >> 3;
+      unsigned int octet;
+
+      for (octet = 0U; octet < octets; octet++)
+      {
+         value |= (uint64_t)esc_octet_get (bitmap, (offset >> 3) + octet)
+                  << (octet << 3);
+      }
+      return value;
+   }
+
    for (bit = 0; bit < length; bit++)
    {
       unsigned int source = offset + bit;
@@ -1786,6 +1804,21 @@ static void COE_bitsliceSet (esc_octet_t *bitmap, unsigned int offset,
                              uint64_t value)
 {
    unsigned int bit;
+
+   /* See COE_bitsliceGet: use an octet copy for standard PDO mappings. */
+   if (((offset & 7U) == 0U) && ((length & 7U) == 0U))
+   {
+      unsigned int octets = length >> 3;
+      unsigned int octet;
+
+      for (octet = 0U; octet < octets; octet++)
+      {
+         esc_octet_set (bitmap, (offset >> 3) + octet,
+                        (uint8_t)(value >> (octet << 3)));
+      }
+      return;
+   }
+
    for (bit = 0; bit < length; bit++)
    {
       unsigned int target = offset + bit;

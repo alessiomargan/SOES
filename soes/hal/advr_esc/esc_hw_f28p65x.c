@@ -22,7 +22,7 @@ static inline void ESC_refreshALEvent(void) {
 	return;
 }
 
-static uint16_t ESC_readByte(uint16_t address)
+static inline uint16_t ESC_readByte(uint16_t address)
 {
     uint16_t word = ESC_readWord(address & 0xFFFEU);
 
@@ -31,7 +31,7 @@ static uint16_t ESC_readByte(uint16_t address)
            : (word & 0x00FFU);
 }
 
-static void ESC_writeByte(uint16_t value, uint16_t address)
+static inline void ESC_writeByte(uint16_t value, uint16_t address)
 {
     uint16_t aligned = address & 0xFFFEU;
     uint16_t word = ESC_readWord(aligned);
@@ -98,6 +98,7 @@ void ESC_write_octets(uint16_t address, const esc_octet_t *buf, uint16_t len)
     ESC_refreshALEvent();
 }
 
+__attribute__((section(".TI.ramfunc")))
 void ESC_read(uint16_t address, void *buf, uint16_t len)
 {
     if(len == 1U)
@@ -120,6 +121,7 @@ void ESC_read(uint16_t address, void *buf, uint16_t len)
     ESC_refreshALEvent();
 }
 
+__attribute__((section(".TI.ramfunc")))
 void ESC_write(uint16_t address, void *buf, uint16_t len)
 {
     if(len == 1U)
