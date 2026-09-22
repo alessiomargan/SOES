@@ -29,16 +29,15 @@ extern "C"
  * octet packing when transferring data to and from the EtherCAT peripheral.
  */
 #if defined(__TMS320C28XX__)
-#ifndef UINT8_MAX
-typedef uint16_t uint8_t;
-#define UINT8_MAX UINT16_MAX
-#endif
-
-#ifndef INT8_MAX
-typedef int16_t int8_t;
-#define INT8_MIN INT16_MIN
-#define INT8_MAX INT16_MAX
-#endif
+    #ifndef UINT8_MAX
+        typedef uint16_t uint8_t;
+        #define UINT8_MAX UINT16_MAX
+    #endif
+    #ifndef INT8_MAX
+        typedef int16_t int8_t;
+    #define INT8_MIN INT16_MIN
+    #define INT8_MAX INT16_MAX
+    #endif
 #endif
 
 #ifndef MIN
@@ -54,11 +53,11 @@ typedef int16_t int8_t;
 #define CC_PACKED_BEGIN
 #define CC_PACKED_END
 #if defined(__TMS320C28XX__)
-#define CC_PACKED
-#define CC_ALIGNED(n)
+    #define CC_PACKED
+    #define CC_ALIGNED(n)
 #else
-#define CC_PACKED       __attribute__((packed))
-#define CC_ALIGNED(n)   __attribute__((aligned (n)))
+    #define CC_PACKED       __attribute__((packed))
+    #define CC_ALIGNED(n)   __attribute__((aligned (n)))
 #endif
 
 #define CC_ASSERT(exp) assert (exp)
@@ -78,20 +77,20 @@ typedef int16_t int8_t;
 #define CC_ATOMIC_OR(var,val)    __atomic_or_fetch(&var,val,__ATOMIC_SEQ_CST)
 */
 #if BYTE_ORDER == BIG_ENDIAN
-#define htoes(x) CC_SWAP16 ((uint16_t)(x))
-#define htoel(x) CC_SWAP32 ((uint32_t)(x))
+    #define htoes(x) CC_SWAP16 ((uint16_t)(x))
+    #define htoel(x) CC_SWAP32 ((uint32_t)(x))
 #else
-#define htoes(x) (x)
-#define htoel(x) (x)
+    #define htoes(x) (x)
+    #define htoel(x) (x)
 #endif
 
 #define etohs(x) htoes (x)
 #define etohl(x) htoel (x)
 
 #if BYTE_ORDER == LITTLE_ENDIAN
-#define EC_LITTLE_ENDIAN
+    #define EC_LITTLE_ENDIAN
 #else
-#define EC_BIG_ENDIAN
+    #define EC_BIG_ENDIAN
 #endif
 
 #ifdef ESC_DEBUG
@@ -100,7 +99,13 @@ typedef int16_t int8_t;
         #define DPRINT(...) rprintp ("soes: "__VA_ARGS__)
     #else
         #include <stdio.h>
-        #define DPRINT(fmt, ...) printf("soes: " fmt, ##__VA_ARGS__)
+        #define DPRINT(fmt, ...) printf("soes: " fmt , ##__VA_ARGS__)
+        #if !defined(PRINTLN)
+        #define PRINTLN(fmt, ...)                         \
+            do {                                          \
+                printf(fmt "\r\n", ##__VA_ARGS__);        \
+            } while (0)
+        #endif
     #endif
 #else
     #define DPRINT(...)
