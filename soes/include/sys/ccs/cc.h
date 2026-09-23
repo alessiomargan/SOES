@@ -41,11 +41,11 @@ extern "C"
 #endif
 
 #ifndef MIN
-#define MIN(a,b) (((a)<(b))?(a):(b))
+    #define MIN(a,b) (((a)<(b))?(a):(b))
 #endif
 
 #ifndef MAX
-#define MAX(a,b) (((a)>(b))?(a):(b))
+    #define MAX(a,b) (((a)>(b))?(a):(b))
 #endif
 
 #define CC_RAMFUNC   __attribute__((section(".TI.ramfunc")))
@@ -99,7 +99,10 @@ extern "C"
         #define DPRINT(...) rprintp ("soes: "__VA_ARGS__)
     #else
         #include <stdio.h>
-        #define DPRINT(fmt, ...) printf("soes: " fmt , ##__VA_ARGS__)
+        #define DPRINT(fmt, ...)                        \
+            do {                                        \
+                printf("soes: " fmt , ##__VA_ARGS__);   \
+            } while (0)
         #if !defined(PRINTLN)
         #define PRINTLN(fmt, ...)                         \
             do {                                          \
