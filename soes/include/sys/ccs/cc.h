@@ -29,14 +29,13 @@ extern "C"
  * octet packing when transferring data to and from the EtherCAT peripheral.
  */
 #if defined(__TMS320C28XX__)
+    #include <inc/hw_types.h>
     #ifndef UINT8_MAX
-        typedef uint16_t uint8_t;
         #define UINT8_MAX UINT16_MAX
     #endif
     #ifndef INT8_MAX
-        typedef int16_t int8_t;
-    #define INT8_MIN INT16_MIN
-    #define INT8_MAX INT16_MAX
+        #define INT8_MIN INT16_MIN
+        #define INT8_MAX INT16_MAX
     #endif
 #endif
 

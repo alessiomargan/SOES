@@ -109,7 +109,7 @@ typedef struct
 #define TX_PDO_OBJIDX           0x1c13
 #define RX_PDO_OBJIDX           0x1c12
 
-#define COMPLETE_ACCESS_FLAG    (1 << 15)
+#define COMPLETE_ACCESS_FLAG    0x8000U //(1 << 15)
 
 void ESC_coeprocess (void);
 int16_t SDO_findsubindex (int32_t nidx, uint8_t subindex);

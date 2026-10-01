@@ -784,6 +784,7 @@ uint8_t ESC_startoutput (uint8_t state);
 void ESC_stopoutput (void);
 void ESC_state (void);
 void ESC_sm_act_event (void);
+uint8_t ESC_SYNCactivation (void);
 
 /* From hardware file */
 void ESC_read (uint16_t address, void *buf, uint16_t len);
