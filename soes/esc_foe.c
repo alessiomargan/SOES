@@ -48,6 +48,35 @@ static foe_file_cfg_t * foe_file;
  */
 static _FOEvar FOEvar;
 
+/* FoE wire offsets, expressed in EtherCAT octets. */
+#define FOE_O_OPCODE   ESC_MBXHSIZE
+#define FOE_O_RESERVED (FOE_O_OPCODE + 1U)
+#define FOE_O_VALUE    (FOE_O_OPCODE + 2U)
+#define FOE_O_DATA     (ESC_MBXHSIZE + ESC_FOEHSIZE)
+
+static uint8_t foe_opcode (const esc_octet_t *mailbox)
+{
+   return (uint8_t)esc_octet_get (mailbox, FOE_O_OPCODE);
+}
+
+static void foe_set_header (esc_octet_t *mailbox, uint8_t opcode,
+                            uint32_t value)
+{
+   esc_octet_set (mailbox, FOE_O_OPCODE, opcode);
+   esc_octet_set (mailbox, FOE_O_RESERVED, 0U);
+   esc_put_le32 (mailbox, FOE_O_VALUE, value);
+}
+
+static uint32_t foe_value (const esc_octet_t *mailbox)
+{
+   return esc_get_le32 (mailbox, FOE_O_VALUE);
+}
+
+static esc_octet_t *foe_data (esc_octet_t *mailbox)
+{
+   return &mailbox[FOE_O_DATA];
+}
+
 /** Validate a write or read request by checking filename and password.
  *
  * @param[in] name      = Filename
@@ -57,11 +86,10 @@ static _FOEvar FOEvar;
  * @return 0= if we succeed, FOE_ERR_NOTFOUND something wrong with filename or
  * password
  */
-static uint32_t FOE_fopen (char *name, uint8_t num_chars, uint32_t pass, uint8_t op)
+static uint32_t FOE_fopen (const esc_octet_t *name, uint8_t num_chars,
+                           uint32_t pass, uint8_t op)
 {
    uint32_t i;
-
-   DPRINT("%s %d 0x%04X\n", name, num_chars, pass);
 
    /* Unpack the file name into characters we can look at. */
    if (num_chars > FOE_FN_MAX)
@@ -71,9 +99,11 @@ static uint32_t FOE_fopen (char *name, uint8_t num_chars, uint32_t pass, uint8_t
 
    for (i = 0; i < num_chars; i++)
    {
-      foe_file_name[i] = name[i];
+      foe_file_name[i] = (char)esc_octet_get (name, i);
    }
    foe_file_name[i] = '\0';
+
+   DPRINT("%s %d 0x%"PRIX32"\n", foe_file_name, num_chars, pass);
 
    /* Figure out what file they're talking about. */
    for (i = 0; i < foe_cfg->n_files; i++)
@@ -137,7 +167,7 @@ static uint32_t FOE_fopen (char *name, uint8_t num_chars, uint32_t pass, uint8_t
 
  * @return Number of copied bytes.
  */
-static uint32_t FOE_fread (uint8_t * data, uint32_t maxlength)
+static uint32_t FOE_fread (esc_octet_t * data, uint32_t maxlength)
 {
    uint32_t ncopied = 0;
 
@@ -155,7 +185,8 @@ static uint32_t FOE_fread (uint8_t * data, uint32_t maxlength)
        }
 
        maxlength--;
-	   *(data++) = foe_cfg->fbuffer[FOEvar.fbufposition++];
+       esc_octet_set (data++, 0U,
+                      foe_cfg->fbuffer[FOEvar.fbufposition++]);
 
 	   FOEvar.fposition++;
 	   ncopied++;
@@ -176,7 +207,7 @@ static uint32_t FOE_fread (uint8_t * data, uint32_t maxlength)
 
  * @return Number of copied bytes.
  */
-static uint32_t FOE_fwrite (uint8_t *data, uint32_t length)
+static uint32_t FOE_fwrite (const esc_octet_t *data, uint32_t length)
 {
     uint32_t ncopied = 0;
     uint32_t failed = 0;
@@ -187,7 +218,8 @@ static uint32_t FOE_fwrite (uint8_t *data, uint32_t length)
     while (length && (FOEvar.fend - FOEvar.fposition) && !failed)
     {
        length--;
-       foe_cfg->fbuffer[FOEvar.fbufposition++] = *(data++);
+       foe_cfg->fbuffer[FOEvar.fbufposition++] =
+          (uint8_t)esc_octet_get (data++, 0U);
        if(FOEvar.fbufposition >= foe_cfg->buffer_size)
        {
           failed = foe_file->write_function (foe_file, foe_cfg->fbuffer, FOEvar.fbufposition);
@@ -261,7 +293,7 @@ void FOE_init ()
  */
 static void FOE_abort (uint32_t code)
 {
-   _FOE *foembx;
+   esc_octet_t *mailbox;
    uint8_t mbxhandle;
 
    if (code)
@@ -270,11 +302,11 @@ static void FOE_abort (uint32_t code)
       mbxhandle = ESC_claimbuffer ();
       if (mbxhandle)
       {
-         foembx = (_FOE *) &MBX[mbxhandle * ESC_MBXSIZE];
-         foembx->mbxheader.length = htoes (ESC_FOEHSIZE);   /* Don't bother with error text for now. */
-         foembx->mbxheader.mbxtype = MBXFOE;
-         foembx->foeheader.opcode = FOE_OP_ERR;
-         foembx->foeheader.errorcode = htoel (code);
+         mailbox = &MBX[mbxhandle * ESC_MBXSIZE];
+         /* Don't bother with error text for now. */
+         esc_mbx_set_length (mailbox, ESC_FOEHSIZE);
+         esc_mbx_set_type (mailbox, MBXFOE);
+         foe_set_header (mailbox, FOE_OP_ERR, code);
          MBXcontrol[mbxhandle].state = MBXstate_outreq;
       }
       /* Nothing we can do if we can't get an outbound mailbox. */
@@ -296,20 +328,19 @@ static void FOE_abort (uint32_t code)
  */
 static uint32_t FOE_send_data_packet ()
 {
-   _FOE *foembx;
+   esc_octet_t *mailbox;
    uint32_t data_len;
    uint8_t mbxhandle;
 
    mbxhandle = ESC_claimbuffer ();
    if (mbxhandle)
    {
-      foembx = (_FOE *) &MBX[mbxhandle * ESC_MBXSIZE];
-      data_len = FOE_fread (foembx->data, ESC_FOE_DATA_SIZE);
-      foembx->foeheader.opcode = FOE_OP_DATA;
-      foembx->foeheader.packetnumber = htoel (FOEvar.foepacket);
+      mailbox = &MBX[mbxhandle * ESC_MBXSIZE];
+      data_len = FOE_fread (foe_data (mailbox), ESC_FOE_DATA_SIZE);
+      foe_set_header (mailbox, FOE_OP_DATA, FOEvar.foepacket);
       FOEvar.foepacket++;
-      foembx->mbxheader.length = htoes (data_len + ESC_FOEHSIZE);
-      foembx->mbxheader.mbxtype = MBXFOE;
+      esc_mbx_set_length (mailbox, (uint16_t)(data_len + ESC_FOEHSIZE));
+      esc_mbx_set_type (mailbox, MBXFOE);
       /* Mark the outbound mailbox as filled. */
       MBXcontrol[mbxhandle].state = MBXstate_outreq;
       return data_len;
@@ -327,18 +358,17 @@ static uint32_t FOE_send_data_packet ()
  */
 static uint32_t FOE_send_ack ()
 {
-   _FOE *foembx;
+   esc_octet_t *mailbox;
    uint8_t mbxhandle;
 
    mbxhandle = ESC_claimbuffer ();
    if (mbxhandle)
    {
       DPRINT("FOE_send_ack\n");
-      foembx = (_FOE *) &MBX[mbxhandle * ESC_MBXSIZE];
-      foembx->mbxheader.length = htoes (ESC_FOEHSIZE);
-      foembx->mbxheader.mbxtype = MBXFOE;
-      foembx->foeheader.opcode = FOE_OP_ACK;
-      foembx->foeheader.packetnumber = htoel (FOEvar.foepacket);
+      mailbox = &MBX[mbxhandle * ESC_MBXSIZE];
+      esc_mbx_set_length (mailbox, ESC_FOEHSIZE);
+      esc_mbx_set_type (mailbox, MBXFOE);
+      foe_set_header (mailbox, FOE_OP_ACK, FOEvar.foepacket);
       FOEvar.foepacket++;
       MBXcontrol[mbxhandle].state = MBXstate_outreq;
       return 0;
@@ -360,7 +390,7 @@ static uint32_t FOE_send_ack ()
  */
 static void FOE_read ()
 {
-   _FOE *foembx;
+   esc_octet_t *mailbox;
    uint32_t password;
    uint32_t res;
    uint8_t data_len;
@@ -372,12 +402,12 @@ static void FOE_read ()
    }
 
    FOE_init ();
-   foembx = (_FOE *) &MBX[0];
+   mailbox = &MBX[0];
    /* Get the length of the file name in octets. */
-   data_len = (uint8_t)(etohs (foembx->mbxheader.length) - ESC_FOEHSIZE);
-   password = etohl (foembx->foeheader.password);
+   data_len = (uint8_t)(esc_mbx_length (mailbox) - ESC_FOEHSIZE);
+   password = foe_value (mailbox);
 
-   res = FOE_fopen (foembx->filename, data_len, password, FOE_OP_RRQ);
+   res = FOE_fopen (foe_data (mailbox), data_len, password, FOE_OP_RRQ);
    if (res == 0)
    {
       FOEvar.foepacket = 1;
@@ -437,7 +467,7 @@ static void FOE_ack ()
  */
 static void FOE_write ()
 {
-   _FOE *foembx;
+   esc_octet_t *mailbox;
    uint32_t password;
    uint32_t res;
    uint8_t data_len;
@@ -449,12 +479,12 @@ static void FOE_write ()
    }
 
    FOE_init ();
-   foembx = (_FOE *) &MBX[0];
-   data_len = (uint8_t)(etohs (foembx->mbxheader.length) - ESC_FOEHSIZE);
-   password = etohl (foembx->foeheader.password);
+   mailbox = &MBX[0];
+   data_len = (uint8_t)(esc_mbx_length (mailbox) - ESC_FOEHSIZE);
+   password = foe_value (mailbox);
 
    /* Get an address we can write the file to, if possible. */
-   res = FOE_fopen (foembx->filename, data_len, password, FOE_OP_WRQ);
+   res = FOE_fopen (foe_data (mailbox), data_len, password, FOE_OP_WRQ);
    DPRINT("%s %sOK, file \"%s\"\n", __func__, (res == 0) ? "" : "N", foe_file_name);
    if (res == 0)
    {
@@ -479,7 +509,7 @@ static void FOE_write ()
  */
 static void FOE_data ()
 {
-   _FOE *foembx;
+   esc_octet_t *mailbox;
    uint32_t packet;
    uint32_t data_len, ncopied;
    uint32_t res;
@@ -490,9 +520,9 @@ static void FOE_data ()
       return;
    }
 
-   foembx = (_FOE*)&MBX[0];
-   data_len = etohs(foembx->mbxheader.length) - ESC_FOEHSIZE;
-   packet = etohl(foembx->foeheader.packetnumber);
+   mailbox = &MBX[0];
+   data_len = esc_mbx_length (mailbox) - ESC_FOEHSIZE;
+   packet = foe_value (mailbox);
 
    if (packet != FOEvar.foepacket)
    {
@@ -515,7 +545,7 @@ static void FOE_data ()
    }
    else
    {
-      ncopied = FOE_fwrite (foembx->data, data_len);
+      ncopied = FOE_fwrite (foe_data (mailbox), data_len);
       if (!ncopied)
       {
          DPRINT("FOE_data no copied\n");
@@ -601,8 +631,7 @@ void FOE_config (foe_cfg_t * cfg)
  */
 void ESC_foeprocess (void)
 {
-   _MBXh *mbh;
-   _FOE *foembx;
+   esc_octet_t *mailbox = &MBX[0];
 
    if (ESCvar.MBXrun == 0)
    {
@@ -610,17 +639,15 @@ void ESC_foeprocess (void)
    }
    if (!ESCvar.xoe && (MBXcontrol[0].state == MBXstate_inclaim))
    {
-      mbh = (_MBXh *) &MBX[0];
-      if (mbh->mbxtype == MBXFOE)
+      if (esc_mbx_type (mailbox) == MBXFOE)
       {
          ESCvar.xoe = MBXFOE;
       }
    }
    if (ESCvar.xoe == MBXFOE)
    {
-      foembx = (_FOE *) &MBX[0];
       /* Verify the size of the file data. */
-      if (etohs (foembx->mbxheader.length) < ESC_FOEHSIZE)
+      if (esc_mbx_length (mailbox) < ESC_FOEHSIZE)
       {
          FOE_abort (MBXERR_SIZETOOSHORT);
       }
@@ -630,7 +657,7 @@ void ESC_foeprocess (void)
       }
       else
       {
-         switch (foembx->foeheader.opcode)
+         switch (foe_opcode (mailbox))
          {
             case FOE_OP_WRQ:
             {

@@ -12,7 +12,7 @@
 #define IS_RXPDO(index) ((index) >= 0x1600 && (index) < 0x1800)
 #define IS_TXPDO(index) ((index) >= 0x1A00 && (index) < 0x1C00)
 
-extern void bootstrap_foe_init(void);
+void bootstrap_foe_init(void) __attribute__((weak));
 
 /* Global variables used by the stack */
 uint8_t     MBX[MBXBUFFERS * MAX(MBXSIZE,MBXSIZEBOOT)];
@@ -396,4 +396,9 @@ void ecat_slv_init (esc_cfg_t * config)
    ESC_stopoutput ();
    /* Init Object Dictionary default values */
    COE_initDefaultValues ();
+}
+
+void bootstrap_foe_init(void)
+{
+   /* Optional application hook. */
 }
