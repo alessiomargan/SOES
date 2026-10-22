@@ -422,6 +422,9 @@ uint8_t ESC_startmbxboot (uint8_t state)
  */
 void ESC_stopmbx (void)
 {
+#if USE_FOE
+   FOE_init ();
+#endif
    uint8_t n;
    ESCvar.MBXrun = 0;
    ESC_SMdisable (0);

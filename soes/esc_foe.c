@@ -86,7 +86,7 @@ static esc_octet_t *foe_data (esc_octet_t *mailbox)
  * @return 0= if we succeed, FOE_ERR_NOTFOUND something wrong with filename or
  * password
  */
-static uint32_t FOE_fopen (const esc_octet_t *name, uint8_t num_chars,
+static uint32_t FOE_fopen (const esc_octet_t *name, uint16_t num_chars,
                            uint32_t pass, uint8_t op)
 {
    uint32_t i;
@@ -94,7 +94,7 @@ static uint32_t FOE_fopen (const esc_octet_t *name, uint8_t num_chars,
    /* Unpack the file name into characters we can look at. */
    if (num_chars > FOE_FN_MAX)
    {
-      num_chars = FOE_FN_MAX;
+      return FOE_ERR_NOTFOUND;
    }
 
    for (i = 0; i < num_chars; i++)
@@ -108,7 +108,8 @@ static uint32_t FOE_fopen (const esc_octet_t *name, uint8_t num_chars,
    /* Figure out what file they're talking about. */
    for (i = 0; i < foe_cfg->n_files; i++)
    {
-      if (0 == strncmp (foe_file_name, foe_cfg->files[i].name, num_chars))
+      if ((strlen(foe_cfg->files[i].name) == num_chars) &&
+          (memcmp(foe_file_name, foe_cfg->files[i].name, num_chars) == 0))
       {
          if (pass != foe_cfg->files[i].filepass)
          {
@@ -269,7 +270,7 @@ static uint32_t FOE_fclose (void)
       DPRINT("FOE_fclose EXTRA write ended\n");
    }
    if ( failed == 0 && foe_file->on_foe_close != 0) {
-   	   foe_file->on_foe_close();
+       failed = foe_file->on_foe_close();
    }
    return failed;
 }
@@ -280,6 +281,7 @@ static uint32_t FOE_fclose (void)
 void FOE_init ()
 {
    DPRINT("FOE_init\n");
+   foe_file = NULL;
    FOEvar.foepacket = 0;
    FOEvar.foestate = FOE_READY;
    FOEvar.fposition = 0;
@@ -393,7 +395,7 @@ static void FOE_read ()
    esc_octet_t *mailbox;
    uint32_t password;
    uint32_t res;
-   uint8_t data_len;
+   uint16_t data_len;
 
    if (FOEvar.foestate != FOE_READY)
    {
@@ -404,7 +406,7 @@ static void FOE_read ()
    FOE_init ();
    mailbox = &MBX[0];
    /* Get the length of the file name in octets. */
-   data_len = (uint8_t)(esc_mbx_length (mailbox) - ESC_FOEHSIZE);
+   data_len = (uint16_t)(esc_mbx_length (mailbox) - ESC_FOEHSIZE);
    password = foe_value (mailbox);
 
    res = FOE_fopen (foe_data (mailbox), data_len, password, FOE_OP_RRQ);
@@ -470,7 +472,7 @@ static void FOE_write ()
    esc_octet_t *mailbox;
    uint32_t password;
    uint32_t res;
-   uint8_t data_len;
+   uint16_t data_len;
 
    if (FOEvar.foestate != FOE_READY)
    {
@@ -480,7 +482,7 @@ static void FOE_write ()
 
    FOE_init ();
    mailbox = &MBX[0];
-   data_len = (uint8_t)(esc_mbx_length (mailbox) - ESC_FOEHSIZE);
+   data_len = (uint16_t)(esc_mbx_length (mailbox) - ESC_FOEHSIZE);
    password = foe_value (mailbox);
 
    /* Get an address we can write the file to, if possible. */
@@ -534,9 +536,14 @@ static void FOE_data ()
    else if (data_len == 0)
    {
       DPRINT("FOE_data completed\n");
-      FOE_fclose ();
+      if (FOE_fclose ())
+      {
+         FOE_abort (FOE_ERR_PROGERROR);
+         return;
+      }
       res = FOE_send_ack ();
-      FOE_init ();
+      if (res) { FOE_abort (res); }
+      else { FOE_init (); }
    }
    else if (FOEvar.fposition + data_len > FOEvar.fend)
    {
@@ -558,6 +565,7 @@ static void FOE_data ()
          {
             DPRINT("FOE_data only %"PRIu32" of %"PRIu32" copied\n",ncopied, data_len);
             FOE_abort (FOE_ERR_PROGERROR);
+            return;
          }
          res = FOE_send_ack ();
          if (res)
@@ -576,7 +584,8 @@ static void FOE_data ()
          {
             DPRINT("FOE_data completed\n");
             res = FOE_send_ack ();
-            FOE_init ();
+            if (res) { FOE_abort (res); }
+            else { FOE_init (); }
          }
       }
    }
@@ -635,6 +644,7 @@ void ESC_foeprocess (void)
 
    if (ESCvar.MBXrun == 0)
    {
+      FOE_init ();
       return;
    }
    if (!ESCvar.xoe && (MBXcontrol[0].state == MBXstate_inclaim))
@@ -650,6 +660,10 @@ void ESC_foeprocess (void)
       if (esc_mbx_length (mailbox) < ESC_FOEHSIZE)
       {
          FOE_abort (MBXERR_SIZETOOSHORT);
+      }
+      else if (esc_mbx_length (mailbox) > ESC_MBXSIZE - ESC_MBXHSIZE)
+      {
+         FOE_abort (FOE_ERR_ILLEGAL);
       }
       else if ((ESCvar.ALstatus != ESCboot) && (ESCvar.ALstatus != ESCpreop))
       {
